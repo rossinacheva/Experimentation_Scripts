@@ -1,0 +1,577 @@
+---
+title: "Timeseries_Pronto"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Deep dive on Rides impact using time series predition
+
+#### Loading R packages Data from CO since 11. Nov (data - https://docs.google.com/spreadsheets/d/1USfHwoNz6bLl_wbLbiDJyy5tXnAtTiptRpTnfLdolZ4/edit#gid=957374033)
+
+
+
+```{r load_pack, echo=FALSE, include=FALSE}
+library(forecast)
+library(MLmetrics)
+library(dplyr)
+library(astsa)
+library(CausalImpact)
+library(zoo)
+```
+
+```{r General Data Overviews, echo=FALSE}
+# Load Data 
+data=read.csv("/Users/r.nacheva/Downloads/Pronto Data  at Zone - Service - Date level - Data v2.csv") # All
+
+head(data)
+
+```
+
+```{r General Data Overviews1, echo=FALSE, include=FALSE}
+
+data$Date <- as.Date(data$Date,format = "%m/%d/%Y") # Change Data format
+
+data = data[order(data$Date),] # Order by date
+data$week_num = strftime(data$Date, format = "%V") # Add weekl number
+data$week_day <- weekdays(as.Date(data$Date)) #Add week day
+
+data = as.data.frame(data)
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+
+####### Plot data on Rides and check to outliers or strange behaviour
+#plot(data_a$EtRC, col="black", xlab="Day", ylab="Rides", main="Overview Rides", type='l')
+
+
+```
+
+
+```{r Treatment Zones , echo=FALSE, include=FALSE}
+#### Treatment Zones
+segment = "period_1_ProntoZones"
+
+data_a = subset(data, data$Zone %in% c(710,709,708) )#& data$Service %in% c(1,33))
+
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+
+check = length(unique(data_a$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+
+
+data_a$flag = check
+
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+correl = c()
+
+summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2021-12-06", "2022-01-19"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+#summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,'none')
+}
+
+output_1 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+#write.table(output,"/Users/r.nacheva/Downloads/Pront0_Checks.csv", sep=',', dec='.',row.names=F)
+
+
+```
+
+
+```{r Control Zones , echo=FALSE, include=FALSE}
+#### Control Zones
+#### Treatment Zones
+segment = "period_1_ControlZones"
+
+data_a = subset(data, data$Zone %in% c(711,98) )#& data$Service %in% c(1,33))
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+
+check = length(unique(data_a$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+
+
+data_a$flag = check
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+
+summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2021-12-06", "2022-01-19"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,'none')
+}
+
+output_2 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+#write.table(output,"/Users/r.nacheva/Downloads/Pront0_Checks.csv", sep=',', dec='.',row.names=F)
+
+
+```
+```{r period 2 pronto , echo=FALSE, include=FALSE}
+#### Treatment Zones
+segment = "period_2_ProntoZones"
+
+data_a = subset(data, data$Zone %in% c(711,98) )#& data$Service %in% c(1,33))
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+
+check = length(unique(data_a$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+
+
+data_a$flag = check
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+
+summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2022-01-20", "2022-03-01"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,'none')
+}
+
+output_3 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+#write.table(output,"/Users/r.nacheva/Downloads/Pront0_Checks.csv", sep=',', dec='.',row.names=F)
+
+
+```
+
+
+
+
+```{r Period 2 Control , echo=FALSE, include=FALSE}
+#### Control Zones
+#### Treatment Zones
+segment = "period_2_ControlZones"
+
+data_a = subset(data, data$Zone %in% c(711,98) )#& data$Service %in% c(1,33))
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+
+check = length(unique(data_a$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+
+
+data_a$flag = check
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+
+summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2022-01-20", "2022-03-01"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,'none')
+}
+
+output_4 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+#write.table(output,"/Users/r.nacheva/Downloads/Pront0_Checks.csv", sep=',', dec='.',row.names=F)
+
+
+```
+
+```{r Corrceted 1 , echo=FALSE, include=FALSE}
+#### Corrected
+segment = "period_1_Corrected"
+
+
+data_b = subset(data, data$Zone %in% c(711,98) )#& data$Service %in% c(1,33)) ### Control
+data_a = subset(data, data$Zone %in% c(710,709,708) )#& data$Service %in% c(1,33))    ### Treatment
+
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_b$ETA_sum = data_b$ETA.on.Request.Screen * data_b$Eyeballs
+data_b$TTS_sum = data_b$TTS* data_b$Rides
+data_b$ttrw_sum= data_b$TTRW * data_b$Accepted.Requests
+
+check_a = length(unique(data_a$Service))
+check_b = length(unique(data_b$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+data_b<-summarise_all(group_by_(data_b[c('Date',names(data_b)[sapply(data_b, is.numeric)])],.dots = 'Date'),funs(sum))
+
+data_a$flag = check_a
+data_b$flag = check_b
+
+
+
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs ))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+data_b$EtRC = ifelse(data_b$Eyeballs ==0,0, data_b$Requests/(data_b$Eyeballs/data_b$flag ))
+data_b$EtC = ifelse(data_b$Eyeballs ==0,0, data_b$Rides/(data_b$Eyeballs/data_b$flag))
+data_b$Utilisation = ifelse(data_b$Supply.Hours==0,0, data_b$Active.Hours/data_b$Supply.Hours)
+data_b$ETA_calc = ifelse(data_b$Eyeballs ==0,0, data_b$ETA_sum/(data_b$Eyeballs ))
+data_b$TTS_calc = ifelse(data_b$Rides ==0,0, data_b$TTS_sum /(data_b$Rides ))
+data_b$TTRW_calc = ifelse(data_b$Accepted.Requests ==0,0, data_b$ttrw_sum/(data_b$Accepted.Requests ))
+
+
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+
+correl = c()
+
+
+
+
+for (i in 1: length(kpis_list)) {
+  
+#convert to time series
+a = ts(data_a[[kpis_list[i]]])
+b = ts(data_b[[kpis_list[i]]])
+
+# correlation check
+corrcheck <- cbind(a,b)
+correlation <- window(corrcheck,start=1, end=30)
+correl_a = cor(correlation)[1,2]
+  
+data_a_ready = data_a[c('Date',kpis_list[i])]
+data_b_ready = data_b[c('Date',kpis_list[i])]
+
+dt_a = read.zoo(data_a_ready, format = "%Y-%m-%d")
+dt_b = read.zoo(data_b_ready, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2021-12-06", "2022-01-19"))
+
+impact_c <- CausalImpact(cbind(dt_a,dt_b), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,correl_a)
+}
+
+output_5 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+
+
+```
+
+```{r Correcetd 2 , echo=FALSE, include=FALSE}
+#### Corrected
+segment = "period_2_Corrected"
+
+
+data_b = subset(data, data$Zone %in% c(710,709,708) )#& data$Service %in% c(1,33)) ### Control
+data_a = subset(data, data$Zone %in% c(711,98) )#& data$Service %in% c(1,33))    ### Treatment
+
+data_a$ETA_sum = data_a$ETA.on.Request.Screen * data_a$Eyeballs
+data_a$TTS_sum = data_a$TTS* data_a$Rides
+data_a$ttrw_sum= data_a$TTRW * data_a$Accepted.Requests
+data_b$ETA_sum = data_b$ETA.on.Request.Screen * data_b$Eyeballs
+data_b$TTS_sum = data_b$TTS* data_b$Rides
+data_b$ttrw_sum= data_b$TTRW * data_b$Accepted.Requests
+
+check_a = length(unique(data_a$Service))
+check_b = length(unique(data_b$Service))
+
+data_a<-summarise_all(group_by_(data_a[c('Date',names(data_a)[sapply(data_a, is.numeric)])],.dots = 'Date'),funs(sum))
+data_b<-summarise_all(group_by_(data_b[c('Date',names(data_b)[sapply(data_b, is.numeric)])],.dots = 'Date'),funs(sum))
+
+data_a$flag = check_a
+data_b$flag = check_b
+#data_a$flag = ifelse(data_a$Service > 33, 2,1)
+#data_b$flag = ifelse(data_b$Service > 33, 2,1)
+
+
+data_a$EtRC = ifelse(data_a$Eyeballs ==0,0, data_a$Requests/(data_a$Eyeballs/data_a$flag ))
+data_a$EtC = ifelse(data_a$Eyeballs ==0,0, data_a$Rides/(data_a$Eyeballs/data_a$flag))
+data_a$Utilisation = ifelse(data_a$Supply.Hours==0,0, data_a$Active.Hours/data_a$Supply.Hours)
+data_a$ETA_calc = ifelse(data_a$Eyeballs ==0,0, data_a$ETA_sum/(data_a$Eyeballs ))
+data_a$TTS_calc = ifelse(data_a$Rides ==0,0, data_a$TTS_sum /(data_a$Rides ))
+data_a$TTRW_calc = ifelse(data_a$Accepted.Requests ==0,0, data_a$ttrw_sum/(data_a$Accepted.Requests ))
+
+data_b$EtRC = ifelse(data_b$Eyeballs ==0,0, data_b$Requests/(data_b$Eyeballs/data_b$flag ))
+data_b$EtC = ifelse(data_b$Eyeballs ==0,0, data_b$Rides/(data_b$Eyeballs/data_b$flag))
+data_b$Utilisation = ifelse(data_b$Supply.Hours==0,0, data_b$Active.Hours/data_b$Supply.Hours)
+data_b$ETA_calc = ifelse(data_b$Eyeballs ==0,0, data_b$ETA_sum/(data_b$Eyeballs ))
+data_b$TTS_calc = ifelse(data_b$Rides ==0,0, data_b$TTS_sum /(data_b$Rides ))
+data_b$TTRW_calc = ifelse(data_b$Accepted.Requests ==0,0, data_b$ttrw_sum/(data_b$Accepted.Requests ))
+
+
+
+kpis_list = c ('EtRC','EtC','Rides','Revenue', 'Active.Hours', 'Supply.Hours', 'Utilisation', 'Cancelled.by.Driver',
+         'Cancelled.by.Passenger','ETA_calc','TTS_calc','TTRW_calc')
+
+
+
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentation = c()
+
+correl = c()
+
+
+for (i in 1: length(kpis_list)) {
+  
+#convert to time series
+a = ts(data_a[[kpis_list[i]]])
+b = ts(data_b[[kpis_list[i]]])
+
+# correlation check
+corrcheck <- cbind(a,b)
+correlation <- window(corrcheck,start=1, end=30)
+correl_a = cor(correlation)[1,2]
+  
+data_a_ready = data_a[c('Date',kpis_list[i])]
+data_b_ready = data_b[c('Date',kpis_list[i])]
+
+dt_a = read.zoo(data_a_ready, format = "%Y-%m-%d")
+dt_b = read.zoo(data_b_ready, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2021-11-01", "2021-12-05"))
+post.period <- as.Date(c("2022-01-20", "2022-03-01"))
+
+
+impact_c <- CausalImpact(cbind(dt_a,dt_b), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+
+p_value_a = impact_c$summary[1,15]
+rel_effect_a = impact_c$summary[1,10]
+kpi_a = kpis_list[i]
+
+mean_observed_a = impact_c$summary[1,1]
+mean_predicted_a = impact_c$summary[1,2]
+segmentation_a = segment
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentation = rbind(segmentation,segmentation_a)
+correl = rbind(correl,correl_a)
+}
+
+output_6 <- data.frame(segmentation,kpi,mean_observed,mean_predicted,rel_effect,p_value,correl)
+
+output = rbind(output_5,output_6,output_1,output_2,output_3,output_4)
+write.table(output,"/Users/r.nacheva/Downloads/Pronto_Checks_HopefullyFinal_v6.csv", sep=',', dec='.',row.names=F)
+
+
+```
