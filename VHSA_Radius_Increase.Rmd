@@ -1,0 +1,222 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Deep dive on Rides impact using time series predition
+
+#### Loading R packages Data from CO since 1. April (query - https://redash-co.thebeat.co/queries/10019/source)
+
+
+
+```{r load_pack, echo=FALSE, include=FALSE}
+library(forecast)
+library(MLmetrics)
+library(dplyr)
+library(astsa)
+library(CausalImpact)
+library(zoo)
+library(tinytex)
+library (latexpdf)
+```
+
+```{r General Data Overviews}
+#
+data=read.csv("/Users/r.nacheva/Downloads/Radius_Increase_VHSA_2022_04_28.csv") # All
+
+
+#data = subset(data, data$name == "Bogota")
+data = subset(data, data$name == "Villahermosa")
+
+#Bucaramanga Barranquilla, Medellin, Cali
+
+head(data)
+
+#data$date <- as.Date(data$week,format = "%Y-%m-%d") # Change Data format
+data = data[order(data$date),] # Order by date
+data$week_num = strftime(data$date, format = "%V") # Add weekl number
+data$week_day <- weekdays(as.Date(data$date)) #Add week day
+
+####### Plot data on Rides and check to outliers or strange behaviour
+plot(data$Rides/data$drivers, col="black", xlab="Day", ylab="Rides", main="Overview Rides", type='l')
+
+summary(data)
+```
+
+
+```{r Supply Hours}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(Supply_hours)/sum(drivers))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r Broadcasts per supply hour}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(broadcast)/sum(Supply_hours))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+#pre.period <- as.Date(c("2021-08-05", "2021-09-07")) # Bog
+#post.period <- as.Date(c("2021-09-08", "2021-09-21"))
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+```{r AccR}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc)/sum(broadcast))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r IgnoreR}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(ignored)/sum(broadcast))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r AccR 1km}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc_upto_1km)/sum(request_upto_1km))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r AccR 2km}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc_upto_2km)/sum(request_upto_2km))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+```{r AccR 3km}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc_upto_3km)/sum(request_upto_3km))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r AccR above  3km}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc_above_3km)/sum(request_above_3km))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+
+```{r Rides per Suppl hour}
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(Rides)/sum(drivers))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
+
+
+```{r Acc per driver }
+data_all = group_by(data,date) %>%
+  summarise(Rides=sum(acc)/sum(drivers))
+
+dt_all = read.zoo(data_all, format = "%Y-%m-%d")
+
+
+pre.period <- as.Date(c("2022-03-11", "2022-03-31"))
+post.period <- as.Date(c("2022-04-01", "2022-04-26"))
+
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+plot(impact_c)
+summary(impact_c)
+```
