@@ -28,6 +28,11 @@ kpi_name = c('accR','utilisation')  # same name as inserted in the balancing
 kpi_nominator = c('acc','Active_hours') # same as in data set
 kpi_denominator = c('broadcast','Supply_hours') # same as in data set
 
+# Create data set on new kpis - no user input needed
+kpi = cbind (kpi_name,kpi_nominator,kpi_denominator)
+kpi = as.data.frame(kpi)
+
+
 # Main KPIs you want to balance on and take into consideration for outlier detection
 # Start with your main KPI
 balancing <- c('Rides','Supply_hours','active_days_period','driver_earning','Revenue','acc','accR','utilisation')
@@ -49,10 +54,6 @@ outputname <- '/Users/r.nacheva/Downloads/Balancing_PE_something.csv'
 ############## End manual input
 
 starttime = Sys.time()
-
-# Create data set on new kpis
-kpi = cbind (kpi_name,kpi_nominator,kpi_denominator)
-kpi = as.data.frame(kpi)
 
 
 # Generate random numbers as preparation for balancing
