@@ -31,7 +31,7 @@ kpi_denominator = c('broadcast','Supply_hours') # same as in data set
 # Create data set on new kpis - no user input needed
 kpi = cbind (kpi_name,kpi_nominator,kpi_denominator)
 kpi = as.data.frame(kpi)
-
+kpi
 
 # Main KPIs you want to balance on and take into consideration for outlier detection
 # Start with your main KPI
