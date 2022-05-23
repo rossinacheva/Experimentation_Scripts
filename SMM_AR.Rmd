@@ -1,0 +1,181 @@
+---
+title: "SMM_AR"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load_pack, echo=FALSE, include=FALSE}
+library(forecast)
+library(MLmetrics)
+library(dplyr)
+library(astsa)
+library(CausalImpact)
+library(zoo)
+lapply(list('plyr','dplyr','boot','lubridate','ggplot2'), library, character.only = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# Load Data 
+data=read.csv("/Users/r.nacheva/Downloads/SMM_Results_RN_2022_05_23 (3).csv") # All
+
+
+
+
+data$Date <- as.Date(data$day,format = "%Y-%m-%d") # Change Data format
+
+data = data[order(data$Date),] # Order by date
+data = as.data.frame(data)
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+summary(data)
+head(data)
+
+```
+
+## Including Plots
+
+
+
+
+```{r Increase_hours , echo=FALSE, include=FALSE}
+
+level_0_segment_name = "drivers"
+
+core = data
+segmentation <-  list(segment1 = c('total')
+                      ,segment2 = c('frequency_current')
+
+) 
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$AB == 'Control Group' )# control group
+
+data_tre = subset(segment_input, segment_input$AB == 'Test' ) 
+
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(drivers = sum(drivers),
+            rides= sum(rides),
+            sum_earnings = sum(sum_earnings),
+            sum_fare = sum(sum_fare_ride))%>% 
+  as.data.frame()
+
+data_a$rides_pDr = data_a$rides/ data_a$drivers
+data_a$earnings_pDr = data_a$sum_earnings/ data_a$drivers
+data_a$fare_pRide = data_a$sum_fare/ data_a$rides
+
+
+data_b <- data_tre %>%
+  group_by(Date) %>%
+  dplyr::summarise(drivers = sum(drivers),
+            rides= sum(rides),
+            sum_earnings = sum(sum_earnings),
+            sum_fare = sum(sum_fare_ride))%>% 
+  as.data.frame()
+
+data_b$rides_pDr = data_b$rides/ data_b$drivers
+data_b$earnings_pDr = data_b$sum_earnings/ data_b$drivers
+data_b$fare_pRide = data_b$sum_fare/ data_b$rides
+
+kpis_list = c ('rides_pDr','earnings_pDr','fare_pRide')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+data_all2 = data_b[c('Date',kpis_list[i])]
+
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+dt_all2 = read.zoo(data_all2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-04-01", "2022-04-24"))
+post.period <- as.Date(c("2022-04-25", "2022-05-22"))
+
+
+impact_c <- CausalImpact(cbind(dt_all2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+#plot(impact_c)
+#summary(impact_c)
+
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_3_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+output <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+
+write.table(output,"/Users/r.nacheva/Downloads/SMtM_AR_220523.csv", sep=',', dec='.',row.names=F)
+
+```
