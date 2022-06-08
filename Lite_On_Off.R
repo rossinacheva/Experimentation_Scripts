@@ -19,34 +19,41 @@ starttime = Sys.time()
 ##########################################
 
 
+data_a=read.csv("/Users/r.nacheva/Downloads/GO_weekends_2022_06_08.csv") # All
+data_b=read.csv("/Users/r.nacheva/Downloads/GO_weekends_2022_06_08 (1).csv") # All
+data_c=read.csv("/Users/r.nacheva/Downloads/GO_weekends_2022_06_08 (3).csv") # All
+data_d=read.csv("/Users/r.nacheva/Downloads/GO_weekends_2022_06_08 (2).csv") # All
 
 
-input_1 <- read.csv("/Users/r.nacheva/Downloads/DaIly_Hourly_view_2022_04_01.csv")
-input_2 <- read.csv("/Users/r.nacheva/Downloads/2121129_2022_04_01.csv")
+data = rbind(data_a,data_b,data_c,data_d)
+d = subset(data, data$zone == 'Lima Moderna' & data$service_name == 'Lite')
+e= subset(data, !(data$service_name %in% c('GO','Lite')) &
+                 data$zone %in% c('Lima Centro','Lima Norte','Lima Este','Lima Moderna','Callao','Lima Sur', 'Lima Moderna','All'))
 
-input_3 <- read.csv("/Users/r.nacheva/Downloads/2121130_2022_04_01.csv")
-input_4 <- read.csv("/Users/r.nacheva/Downloads/2121131_2022_04_01.csv")
+data = rbind(d,e)
+data = subset(data,!( data$zone %in% c('Callao') & data$service_name %in% c('Luxi')))
 
-
-data <-rbind(input_1,input_2,input_3,input_4)
 data=data[!(is.na(data$zone) | data$zone=="" ),] 
 data=data[!(is.na(data$service_name) | data$service_name=="" ),] 
-data= subset(data, !(data$service_name == 'GO') & toupper(data$zone )%in% c('TOTAL','LIMA MODERNA','LIMA CENTRO','LIMA SUR','LIMA SUR'
-                                                                          ,'LIMA ESTE','LIMA NORTE','CALLAO'
-))
+
 data$day <- as.Date(data$day,format = "%Y-%m-%d") 
+data$week_num = strftime(data$day, format = "%V") # Add weekl number
+
 
 data$test_version = ifelse(data$hour %in% c('0','1','2','6','7','8','12','13','14','18','19','20') 
-                           &  data$day %in% c(as.Date('2022-03-19'),as.Date('2022-03-20')), 'On'
+                           &  data$day %in% c(as.Date('2022-05-28'),as.Date('2022-05-29')), 'Off'
                            ,ifelse(data$hour %in% c('0','1','2','6','7','8','12','13','14','18','19','20') 
-                                     &    data$day %in% c(as.Date('2022-03-26'),as.Date('2022-03-27')), 'Off'
+                                   &    data$day %in% c(as.Date('2022-06-04'),as.Date('2022-06-05')), 'On'
                                    ,ifelse(!(data$hour %in% c('0','1','2','6','7','8','12','13','14','18','19','20'))  
-                                             &      data$day %in% c(as.Date('2022-03-19'),as.Date('2022-03-20')), 'Off'
+                                           &      data$day %in% c(as.Date('2022-05-28'),as.Date('2022-05-29')), 'On'
                                            ,ifelse(!(data$hour %in% c('0','1','2','6','7','8','12','13','14','18','19','20')) 
-                                                     &     data$day %in% c(as.Date('2022-03-26'),as.Date('2022-03-27')), 'On'
+                                                   &     data$day %in% c(as.Date('2022-06-04'),as.Date('2022-06-05')), 'Off'
                                                    
                                                    ,""))))
-input = data
+input = subset(data, data$test_version %in% c('On','Off'))
+
+
+mm = subset (input, input$service_name == 'Lite')
 
 
 summary(input)
@@ -55,8 +62,8 @@ head(input)
 
 # Define segmentation : COUNTRY, SEASON, Total
 segmentation <-  list(segment1 = c('zone','service_name')
-                      #segmentation <-  list(segment1 = c('COUNTRY','SEASON')
-                      #   ,segment2 = c('service_name')
+                      ,segment2 = c('zone','service_name','week_num')
+                      #    = c('service_name')
                       #  ,segment3 = c('total')
 )
 
@@ -68,13 +75,9 @@ entity <- 'hour'
 
 
 kpis <-c('EtRC','EtC','Rev_pE','PickupRate','Utilisation','Drivers_earnings',
-         'Broadcast_pDr','Avail_2_active','AccR','Rides_pDr','Supply_pDr'
+         'Broadcast_pDr','Avail_2_active','AccR','Rides_pDr','Supply_pDr','sess_eye','available_drivers'
         
 )
-
-
-
-
 
 
 # Define Output file name
@@ -198,14 +201,8 @@ for (level in 1:length(segmentation)){
       
       test <- t.test(Treatment[[kpis[i]]], Control[[kpis[i]]],
                      var.equal = FALSE, alternative = "two.sided"
-                     
-                     
-                     #test <- t.test(subset(Treatment[[kpis[i]]], Treatment[[kpis[i]]] >0) , subset(Control[[kpis[i]]], Control[[kpis[i]]] >0) ,
-                     #              var.equal = FALSE, alternative = "two.sided"                
-                     
+                                         
       )
-      
-      
       
       size_treatment_a = nrow(Treatment)
       size_control_a = nrow(Control)
@@ -217,9 +214,6 @@ for (level in 1:length(segmentation)){
       confidence_interval_a = paste ('(',round(test$conf.int[1],3),' ; ',round(test$conf.int[2],3),')',sep ='')
       pValue_a = round(test$p.value,3)
       Significant_a = ifelse(test$conf.int[1]*test$conf.int[2]>0, 'YES', 'NO')
-      
-      
-      
       
       #Baysian_probability_a = summary(AB1)$probability$Probability 
       
@@ -246,11 +240,186 @@ output <- data.frame(SegmentName,KPI,size_treatment, size_control,mean_treatment
 endtime = Sys.time() - starttime
 endtime
 
-write.table(output,"/Users/r.nacheva/Downloads/Test_Results_Lite_Removal_WE_PE_220401_v4.csv", sep=',', dec='.',row.names=F)
+write.table(output,"/Users/r.nacheva/Downloads/Test_Results_Lite_Removal_WE_PE_Moderna_DirectCom.csv", sep=',', dec='.',row.names=F)
 
 
 
 
+########
+
+level_0_segment_name = "Moderna_to_other"
 
 
+data$Date <- as.Date(data$day,format = "%Y-%m-%d") 
+
+data_1= subset(data, data$zone != 'Lima Moderna' & data$zone != 'All' & data$service_name == 'ALl')# control group
+
+core= subset(data, data$zone == 'Lima Moderna' &  data$test_version != 'On' & data$service_name == 'ALl') # tre group
+
+segmentation <-  list(segment1 = c('total')
+                      # ,segment2 = c('zone')
+                      
+) 
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+    
+    
+    #segment = "control_hours"
+    
+    
+    data_tre = segment_input
+    
+    
+    data_a <- data_1 %>%
+      group_by(Date) %>%
+      dplyr::summarise(sess_eye = sum(sess_eye),
+                       sess_requests= sum(sess_requests),
+                       rides = sum(rides),
+                       revenue = sum(revenue),
+                       dr_earnings = sum(dr_earnings),
+                       ETA = sum(ETA),
+                       available_drivers = sum(available_drivers),
+                       active_drivers = sum(active_drivers),
+                       Active_hours = sum(Active_hours),
+                       Supply_hours = sum(Supply_hours),
+                       pass_cancellations = sum(pass_cancellations),
+                       drv_cancellations = sum(drv_cancellations),
+                       broadcasts_total = sum(broadcasts_total),
+                       acc = sum(acc))%>% 
+      as.data.frame()
+    
+    data_a$EtRC = data_a$sess_requests/ data_a$sess_eye
+    data_a$EtC = data_a$rides/ data_a$sess_eye
+    data_a$PR = data_a$rides/ data_a$sess_requests
+    data_a$Rev_pEye   = data_a$revenue    / data_a$sess_eye
+    data_a$Rev_pRide   = data_a$revenue    / data_a$rides
+    data_a$Driver_earnings   = data_a$dr_earnings    / data_a$available_drivers
+    data_a$Rides_pDr   = data_a$rides    / data_a$available_drivers
+    data_a$avg_Eta   = data_a$ETA    / data_a$rides
+    data_a$Activation_rate   = data_a$active_drivers    / data_a$available_drivers
+    data_a$Supply_pDriver   = data_a$Supply_hours    / data_a$available_drivers
+    data_a$Utilisation   = data_a$Active_hours    / data_a$Supply_hours
+    data_a$Pass_CancR   = data_a$pass_cancellations    / (data_a$pass_cancellations + data_a$rides + data_a$drv_cancellations)
+    data_a$Broadcasts_pDriver   = data_a$broadcasts_total    / data_a$available_drivers
+    data_a$AccR   = data_a$acc    / data_a$broadcasts_total
+    
+    
+    
+    
+    
+    
+    data_b <- data_tre %>%
+      group_by(Date) %>%
+      dplyr::summarise(sess_eye = sum(sess_eye),
+                       sess_requests= sum(sess_requests),
+                       rides = sum(rides),
+                       revenue = sum(revenue),
+                       dr_earnings = sum(dr_earnings),
+                       ETA = sum(ETA),
+                       available_drivers = sum(available_drivers),
+                       active_drivers = sum(active_drivers),
+                       Active_hours = sum(Active_hours),
+                       Supply_hours = sum(Supply_hours),
+                       pass_cancellations = sum(pass_cancellations),
+                       drv_cancellations = sum(drv_cancellations),
+                       broadcasts_total = sum(broadcasts_total),
+                       acc = sum(acc))%>% 
+      as.data.frame()
+    
+    data_b$EtRC = data_b$sess_requests/ data_b$sess_eye
+    data_b$EtC = data_b$rides/ data_b$sess_eye
+    data_b$PR = data_b$rides/ data_b$sess_requests
+    data_b$Rev_pEye   = data_b$revenue    / data_b$sess_eye
+    data_b$Rev_pRide   = data_b$revenue    / data_b$rides
+    data_b$Driver_earnings   = data_b$dr_earnings    / data_b$available_drivers
+    data_b$Rides_pDr   = data_b$rides    / data_b$available_drivers
+    data_b$avg_Eta   = data_b$ETA    / data_b$rides
+    data_b$Activation_rate   = data_b$active_drivers    / data_b$available_drivers
+    data_b$Supply_pDriver   = data_b$Supply_hours    / data_b$available_drivers
+    data_b$Utilisation   = data_b$Active_hours    / data_b$Supply_hours
+    data_b$Pass_CancR   = data_b$pass_cancellations    / (data_b$pass_cancellations + data_b$rides + data_b$drv_cancellations)
+    data_b$Broadcasts_pDriver   = data_b$broadcasts_total    / data_b$available_drivers
+    data_b$AccR   = data_b$acc    / data_b$broadcasts_total
+    
+    kpis_list = c ('EtRC','EtC','PR','Rev_pEye','Rev_pRide','Rides_pDr','Driver_earnings','avg_Eta','Activation_rate','Supply_pDriver',
+                   'Utilisation','Pass_CancR','Broadcasts_pDriver','AccR')
+    
+    #summary(data_a)
+    
+    for (i in 1: length(kpis_list)) {
+      
+      data_all = data_a[c('Date',kpis_list[i])]
+      data_all2 = data_b[c('Date',kpis_list[i])]
+      
+      dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+      dt_all2 = read.zoo(data_all2, format = " %Y-%m-%d") 
+      
+      pre.period <- as.Date(c("2022-04-01", "2022-05-27"))
+      post.period <- as.Date(c("2022-05-28", "2022-06-06"))
+      
+      impact_c <- CausalImpact(cbind(dt_all2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 2))
+      #plot(impact_c)
+      #summary(impact_c)
+      
+      
+      p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+      rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+      kpi_a = kpis_list[i]
+      
+      mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+      mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+      segmentation_a = segmentName
+      flag_segment_a = segmentation[level][[1]][1]
+      
+      p_value = rbind(p_value,p_value_a)
+      rel_effect = rbind(rel_effect,rel_effect_a)
+      kpi = rbind(kpi,kpi_a)
+      mean_observed = rbind(mean_observed,mean_observed_a)
+      mean_predicted = rbind(mean_predicted,mean_predicted_a)
+      segmentationL = rbind(segmentationL,segmentation_a)
+      level_0_segment = rbind(level_0_segment,level_0_segment_name)
+      flag_segment = rbind(flag_segment,flag_segment_a)
+      correl = rbind(correl,'none')
+    }
+  }
+}
+
+#output_3_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+output_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+
+write.table(output_a,"/Users/r.nacheva/Downloads/TimeSeries_Correction_NonLimaModerna.csv", sep=',', dec='.',row.names=F)
 
