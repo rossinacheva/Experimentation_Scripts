@@ -7,7 +7,12 @@ lapply(wants, library, character.only=T)
 
 ##### Insert your data for balancing
 
-input<- read.csv("/Users/r.nacheva/Downloads/Fare_Rec_Targeting_2022_06_20.csv")
+input_a<- read.csv("/Users/r.nacheva/Downloads/Fare_Rec_Targeting_2022_06_20.csv")
+input_b <- read.csv("/Users/r.nacheva/Downloads/Fare_Misestimation_2022_06_20.csv")
+
+input = merge(input_a, input_b,by = 'id_driver', all.x = TRUE)
+
+input$mis = ifelse(input$misest_rides >0, 1,0)
 
 
 summary(input)
@@ -15,7 +20,7 @@ summary(input)
 names(input)
 
 # Define segmentation : LIke country, driver type - most granular combination level.
-segmentation <-  list(segment1 = c('dr_segment')
+segmentation <-  list(segment1 = c('mis')
 )
 
 
@@ -35,7 +40,7 @@ kpi
 
 # Main KPIs you want to balance on and take into consideration for outlier detection
 # Start with your main KPI
-balancing <- c("sum_daily_rides" ,  "sum_daily_revenue", "active_hours",  "supply_hours" ,"utilisation")
+balancing <- c("sum_daily_rides" ,  "sum_daily_revenue", "active_hours",  "supply_hours" ,"utilisation",'misest_rides')
 
 #### Sample size check - please insert expected impact (relative) on your main KPI (first one in the balancing)
 expected_impact = 0.04
