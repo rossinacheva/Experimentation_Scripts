@@ -162,7 +162,7 @@ for (level in 1:length(segmentation)){
         a = pwr.t.test(d=d, sig.level=.05, power = .90, type = 'two.sample')
         sample_size_needed <- a[1]
         
-        check_sample = ifelse (sample_size_needed >=  buckets*nrow(segment_input),paste('ok',sample_size_needed, sep = "_")
+        check_sample = ifelse (sample_size_needed <=  buckets*nrow(segment_input),paste('ok',sample_size_needed, sep = "_")
                                ,paste('not_enough_sample',sample_size_needed, sep = "_"))
         
         #  score_pValue[[balancing[i]]]<-wilcox.test(Treatment[[balancing[i]]],Control[[balancing[i]]])$p.value    
