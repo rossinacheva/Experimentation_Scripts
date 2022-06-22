@@ -165,8 +165,9 @@ for (level in 1:length(segmentation)){
         d <- delta/sigma
         a = pwr.t.test(d=d, sig.level=.05, power = .90, type = 'two.sample')
         
-        reverse = pwr.t.test(n=nrow(segment_input), sig.level=.05, power = .90, type = 'two.sample')
-        mde = reverse$d *sigma
+        reverse = pwr.t.test(n=buckets*nrow(segment_input), sig.level=.05, power = .90, type = 'two.sample')
+        mde = (reverse$d * sigma)/ mean(both[[balancing[1]]])
+  
         
         sample_size_needed <- a[1]
         
