@@ -1,0 +1,1785 @@
+---
+title: "PED_CL_test2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load_pack, echo=FALSE, include=FALSE}
+library(forecast)
+library(MLmetrics)
+library(dplyr)
+library(astsa)
+library(CausalImpact)
+library(zoo)
+lapply(list('plyr','dplyr','boot','lubridate','ggplot2'), library, character.only = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# Load Data 
+data_a=read.csv("/Users/r.nacheva/Downloads/PED_CL_t2_q3_data_extract_1_2022_06_27 (1).csv") # All
+data_b=read.csv("/Users/r.nacheva/Downloads/PED_CL_t2_q3_data_extract_1_2022_06_27.csv") # All
+data = rbind(data_a,data_b)
+
+
+head(data)
+
+
+data$Date <- as.Date(data$hour,format = "%Y-%m-%d") # Change Data format
+
+data = data[order(data$Date),] # Order by date
+data$week_num = strftime(data$Date, format = "%V") # Add weekl number
+data$week_day1 <- weekdays(as.Date(data$Date)) #Add week day
+data$week_day = ifelse (data$week_day1 %in% c('Saturday','Sunday'),'weekend','weekday')
+
+data$hour_r = as.numeric(strftime(data$hour, format = "%H"))
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+
+data$period = ifelse (data$hour >= '2022-06-23 16:00:00.000','after',
+                      ifelse (data$hour >= '2022-06-16 16:00:00.000','week_3',
+                              ifelse (data$hour >= '2022-06-09 16:00:00.000','week_2',
+                                      ifelse (data$hour >= '2022-06-02 16:00:00.000','week_1',
+                                          ifelse (data$hour >= '2022-05-26 16:00:00.000','ignore',
+            
+                      ifelse (data$hour >= '2022-05-19 16:00:00.000','week_3_before',
+                              ifelse (data$hour >= '2022-05-12 16:00:00.000','week_2_before',
+                                      ifelse (data$hour >= '2022-05-05 16:00:00.000','week_1_before',     
+                                            
+                                            
+  'before'
+))))))))
+
+
+
+
+
+
+
+
+
+data$variant = ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(1,5,9,13,17,21), 'increase_7',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(2,6,10,14,18,22), 'increase_14',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(3,7,11,15,19,23), 'increase_21',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(0,4,8,12,16,20), 'Control', 
+               
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(1,5,9,13,17,21), 'increase_21',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(2,6,10,14,18,22), 'increase_7',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(3,7,11,15,19,23), 'increase_14',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(0,4,8,12,16,20), 'Control',       
+  
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(1,5,9,13,17,21), 'increase_14',
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(2,6,10,14,18,22), 'increase_21',
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(3,7,11,15,19,23), 'increase_7',
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(0,4,8,12,16,20), 'Control', 
+            'out_of_test'
+            ))))))))))))
+
+
+# data$time_day = ifelse(data$hour_r %in% c('23','00','01','02','03','04','05') & !(data$week_day %in% c('weekend')), '1_wd_night'
+#                        ,ifelse(data$hour_r %in% c('06','07','08') & !(data$week_day %in% c('weekend')), '2_wd_Peak_AM'
+  #                     ,ifelse(data$hour_r %in% c('09','10','11','12') & !(data$week_day %in% c('weekend')), '3_wd_Valley_AM'
+    #                   ,ifelse(data$hour_r %in% c('13','14','15','16','17') & !(data$week_day %in% c('weekend')), '4_wd_Valley_PM'
+      #                 ,ifelse(data$hour_r %in% c('18','19','20','21','22') & !(data$week_day %in% c('weekend')), '5_wd_Peak_PM'
+                     
+                         
+        #               ,ifelse(data$hour_r %in% c('00','01','02','03','04','05','06') & (data$week_day1 %in% c('Saturday')), '6_we_night'
+          #              ,ifelse(data$hour_r %in% c('07','08','09','10','11','12') & (data$week_day1 %in% c('Saturday')), '7_we_morning'
+            #           ,ifelse(data$hour_r %in% c('13','14','15','16','17','18','19') & (data$week_day1 %in% c('Saturday')),'8_wd_afternoon'
+              #         ,ifelse(data$hour_r %in% c('20','21','22','23') & (data$week_day1 %in% c('Saturday')),'9_wd_evening' 
+                #        
+                  #      ,ifelse(data$hour_r %in% c('01','02','03','04','05','06','07') & (data$week_day1 %in% c('Sunday')), '6_we_night'
+                    #    ,ifelse(data$hour_r %in% c('08','09','10','11','12') & (data$week_day1 %in% c('Sunday')), '7_we_morning'
+                      # ,ifelse(data$hour_r %in% c('13','14','15','16','17','18','19') & (data$week_day1 %in% c('Sunday')),'8_wd_afternoon'
+                      # ,ifelse(data$hour_r %in% c('20','21','22','23','00') & (data$week_day1 %in% c('Sunday')),'9_wd_evening'             
+# ,""
+#                                           )))))))))))))
+
+
+
+data$time_day = ifelse(data$hour_r %in% c(0,1,2,3) , '1_00_03',
+                       ifelse(data$hour_r %in% c(4,5,6,7) , '2_04_07',
+                      ifelse(data$hour_r %in% c(8,9,10,11) , '3_08_11',
+                      ifelse(data$hour_r %in% c(12,13,14,15) , '4_12_15',
+                      ifelse(data$hour_r %in% c(16,17,18,19) , '5_16_19',
+                      ifelse(data$hour_r %in% c(20,21,22,23) , '6_20_23',
+                    ''))))))
+
+
+
+
+data = as.data.frame(data)
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+summary(data)
+head(data)
+
+####### Plot data on Rides and check to outliers or strange behaviour
+#plot(data$eyeballs, col="black", xlab="Day", ylab="Eyeballs", main="Overview Rides", type='l')
+
+data = subset(data, data$variant %in% c('increase_7','increase_14','increase_21','Control'))
+
+
+data$Date1 = ifelse (data$period == 'week_3' & data$hour < '2022-06-17 00:00:00.000', as.Date('2022-06-23'),
+                    ifelse (data$period == 'week_2' & data$hour < '2022-06-10 00:00:00.000', as.Date('2022-06-16'),
+                    ifelse (data$period == 'week_1' & data$hour < '2022-06-03 00:00:00.000', as.Date('2022-06-09'),
+                    ifelse (data$period == 'week_3_before' & data$hour < '2022-05-20 00:00:00.000', as.Date('2022-05-26'),
+                    ifelse (data$period == 'week_2_before' & data$hour < '2022-05-13 00:00:00.000', as.Date('2022-05-19'),
+                    ifelse (data$period == 'week_1_before' & data$hour < '2022-05-06 00:00:00.000', as.Date('2022-05-12'),  
+                            
+                   
+  #                  ifelse (data$period == 'week_3' & data$hour >= '2022-06-23 16:00:00.000', '2022-06-23',
+  #                    ifelse (data$period == 'week_2' & data$hour < '2022-06-16 16:00:00.000', '2022-06-16',
+  #                    ifelse (data$period == 'week_1' & data$hour < '2022-06-09 16:00:00.000', '2022-06-09',
+  #                    ifelse (data$period == 'week_3_before' & data$hour < '2022-05-26 16:00:00.000', '2022-05-26',
+  #                    ifelse (data$period == 'week_2_before' & data$hour < '2022-05-19 16:00:00.000', '2022-05-19',
+  #                    ifelse (data$period == 'week_1_before' & data$hour < '2022-05-12 16:00:00.000', '2022-05-12',   
+                    as.Date(data$hour,format = "%Y-%m-%d")
+
+))))))
+
+
+
+data$Date= as.Date(data$Date1,format = "%Y-%m-%d")
+#write.table(data,"/Users/r.nacheva/Downloads/offf.csv", sep=',', dec='.',row.names=F)
+
+```
+
+
+
+
+
+```{r Control_hours , echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "Control_hours_core"
+
+core = subset(data, data$id_city  == 1)
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+ data_1= subset(segment_input, segment_input$variant %in% c('Control')) 
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(dt_all, pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+output_1 <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+
+```
+
+```{r 7% increase , echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "7%_increase"
+
+core = subset(data, data$id_city  == 1)
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_7')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+output_2 <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 14% increase , echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "14%_increase"
+
+core = subset(data, data$id_city  == 1)
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_14')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+output_3 <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 21% increase , echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "21%_increase"
+
+core = subset(data, data$id_city  == 1)
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_21')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 7))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment) 
+output_4 <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+
+```
+
+
+
+
+```{r 7% increase weekdays, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "7%_increase_wd"
+
+core = subset(data, data$id_city  == 1 & !(data$week_day %in% c('weekend')))
+
+head(core)
+
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_7')
+
+head(data_2)
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 5))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 14% increase weekdays, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "14%_increase_wd"
+
+core = subset(data, data$id_city  == 1 & !(data$week_day %in% c('weekend')))
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_14')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 5))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_b <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 21% increase weekdays, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "21%_increase_wd"
+
+core = subset(data, data$id_city  == 1 & !(data$week_day %in% c('weekend')))
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_21')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 5))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_c <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+
+
+```{r 7% increase weekend, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "7%_increase_we"
+
+core = subset(data, data$id_city  == 1 & (data$week_day %in% c('weekend')))
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_7')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 2))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_d <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 14% increase weekend, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "14%_increase_we"
+
+core = subset(data, data$id_city  == 1 & (data$week_day %in% c('weekend')))
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_14')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 2))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_e <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+```
+
+
+```{r 21% increase weekend, echo=FALSE, include=FALSE}
+#### Treatment Zones
+level_0_segment_name = "21%_increase_we"
+
+core = subset(data, data$id_city  == 1 & (data$week_day %in% c('weekend')))
+core=core[!(is.na(core$zone_cb) | core$zone_cb=="" ),] 
+#core = subset(core,!( core$zone_cb %in% c('Totoralillo','Serena Golf','Colina')))
+
+
+segmentation <-  list(segment1 = c('city_name','time_day')
+                     # ,segment2 = c('zone_cb')
+                    #   ,segment3 = c('zone')
+                     # ,segment4 = c('district')
+                    # ,segment4 = c('battleground')
+)
+p_value = c()
+rel_effect = c()
+kpi = c()
+mean_observed = c()
+mean_predicted = c()
+segmentationL = c()
+correl = c()
+level_0_segment = c()
+flag_segment = c()
+
+for (level in 1:length(segmentation)){
+  
+  if (tolower(segmentation[level][[1]][1]) == "total"){
+    segment_input <- core
+    combinations = 1
+  }
+  else {
+    unique_combinations <- unique(core[,segmentation[level][[1]], drop = FALSE])
+    # filter out missing values
+    unique_combinations <- na.omit(unique_combinations)
+    combinations = nrow(unique_combinations)
+  }
+  
+  for(i_comb in 1:combinations){
+    
+    if (tolower(segmentation[level][[1]][1]) == "total"){
+      segment_input <- core
+    }
+    else {
+      segment_input <- merge(unique_combinations[i_comb,,drop = FALSE], core)
+      
+    }
+    segmentName = ifelse(tolower(segmentation[level][[1]][1]) == "total", "Total", paste(as.character(as.vector(unique_combinations[i_comb,])), collapse = "_"))
+    print(segmentName)
+
+
+#segment = "control_hours"
+
+data_1= subset(segment_input, segment_input$variant %in% c('Control') )# control hours
+data_2 = subset(segment_input, segment_input$variant == 'increase_21')
+
+data_a <- data_1 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_a$EtSC_unsess = data_a$searches/ data_a$eyeballs_unsess
+data_a$EtSC_pPass = data_a$searches/ data_a$unsess_pass
+data_a$EtRC_sess = data_a$sess_requests/ data_a$eyeballs_sess
+data_a$EtC_sess = ifelse(data_a$rides >0, data_a$rides/ data_a$eyeballs_sess,0)
+data_a$RpE_sess = ifelse(data_a$rides >0, data_a$revenue/ data_a$eyeballs_sess,0)
+data_a$PuR_sess = ifelse(data_a$sess_requests >0, data_a$rides/ data_a$sess_requests,0)
+data_a$Dr_earnings = data_a$dr_earnings/ data_a$available_drivers
+data_a$Utilisation = data_a$active_hours/ data_a$supply_hours
+data_a$DP_level = data_a$unsess_surge_amount_search_sum/data_a$unsess_basic_amount
+
+
+
+data_b <- data_2 %>%
+  group_by(Date) %>%
+  dplyr::summarise(
+            searches = sum(unsess_searches),
+            eyeballs_sess= sum(sess_eyeballs),
+            eyeballs_unsess= sum(unsess_eyeballs),
+            unsess_requests = sum(unsess_requests),
+            unsess_pass = sum(unsess_pass),
+            sess_requests = sum(sess_requests),
+            rides = sum(total_rides),
+            revenue = sum(revenue),
+            dr_earnings = sum(dr_earnings),
+            available_drivers = sum(available_drivers),
+            supply_hours = sum(supply_hours),
+            unsess_surge_amount_search_sum = sum(unsess_surge_amount_search_sum),
+            unsess_basic_amount = sum(unsess_basic_amount),
+            active_hours = sum(on_ride))%>% 
+  as.data.frame()
+data_b$EtSC_unsess = data_b$searches/ data_b$eyeballs_unsess
+data_b$EtSC_pPass = data_b$searches/ data_b$unsess_pass
+data_b$EtRC_sess = data_b$sess_requests/ data_b$eyeballs_sess
+data_b$EtC_sess = ifelse(data_b$rides >0, data_b$rides/ data_b$eyeballs_sess,0)
+data_b$RpE_sess = ifelse(data_b$rides >0, data_b$revenue/ data_b$eyeballs_sess,0)
+data_b$PuR_sess = ifelse(data_b$sess_requests >0, data_b$rides/ data_b$sess_requests,0)
+data_b$Dr_earnings = data_b$dr_earnings/ data_b$available_drivers
+data_b$Utilisation = data_b$active_hours/ data_b$supply_hours
+data_b$DP_level = data_b$unsess_surge_amount_search_sum/data_b$unsess_basic_amount
+
+
+kpis_list = c ('EtSC_unsess','EtSC_pPass','EtRC_sess','EtC_sess',
+               'RpE_sess','PuR_sess','Dr_earnings','Utilisation','DP_level')
+
+#summary(data_a)
+
+for (i in 1: length(kpis_list)) {
+
+data_all = data_a[c('Date',kpis_list[i])]
+dt_all = read.zoo(data_all, format = " %Y-%m-%d") 
+
+data_all_2 = data_b[c('Date',kpis_list[i])]
+dt_all_2 = read.zoo(data_all_2, format = " %Y-%m-%d") 
+
+pre.period <- as.Date(c("2022-05-06", "2022-05-26"))
+post.period <- as.Date(c("2022-06-03", "2022-06-23"))
+
+impact_c <- CausalImpact(cbind(dt_all_2,dt_all), pre.period, post.period, model.args = list(niter = 5000, nseasons = 2))
+#plot(impact_c)
+#summary(impact_c)
+
+p_value_a = ifelse (is.null( impact_c$summary[1,15]),0, impact_c$summary[1,15])
+rel_effect_a = ifelse (is.null(impact_c$summary[1,10] ),0,impact_c$summary[1,10])
+kpi_a = kpis_list[i]
+
+mean_observed_a = ifelse (is.null( impact_c$summary[1,1]),0, impact_c$summary[1,1])
+mean_predicted_a = ifelse (is.null( impact_c$summary[1,2]),0, impact_c$summary[1,2])
+
+segmentation_a = segmentName
+flag_segment_a = segmentation[level][[1]][1]
+
+p_value = rbind(p_value,p_value_a)
+rel_effect = rbind(rel_effect,rel_effect_a)
+kpi = rbind(kpi,kpi_a)
+mean_observed = rbind(mean_observed,mean_observed_a)
+mean_predicted = rbind(mean_predicted,mean_predicted_a)
+segmentationL = rbind(segmentationL,segmentation_a)
+level_0_segment = rbind(level_0_segment,level_0_segment_name)
+flag_segment = rbind(flag_segment,flag_segment_a)
+correl = rbind(correl,'none')
+}
+}
+}
+
+#output_1_a <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+out_f <- data.frame(level_0_segment,segmentationL,kpi,mean_observed,mean_predicted,rel_effect,p_value,flag_segment)
+
+
+
+output = rbind(output_1,output_2,output_3,output_4,out_a,out_b,out_c,out_d,out_e,out_f)
+
+output$market = 'CL_test2'
+output$eyeballs = 100
+
+#write.table(output,"/Users/r.nacheva/Downloads/PED_CL_Timeseries_220322.csv", sep=',', dec='.',row.names=F)
+write.table(output,"/Users/r.nacheva/Downloads/PED_CL_test_2_totals_v8.csv", sep=',', dec='.',row.names=F)
+
+```
+
