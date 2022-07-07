@@ -162,7 +162,12 @@ for (level in 1:length(segmentation)){
         a = pwr.t.test(d=d, sig.level=.05, power = .90, type = 'two.sample')
         sample_size_needed <- a[1]
         
-        check_sample = ifelse (sample_size_needed <=  buckets*nrow(segment_input),paste('ok',sample_size_needed, sep = "_")
+       reverse = pwr.t.test(n=nrow(segment_input), sig.level=.05, power = .80, type = 'two.sample')
+        mde = reverse$d 
+        
+        sample_size_needed <- a[1]
+        
+        check_sample = ifelse (sample_size_needed <=  buckets*nrow(segment_input),paste('ok',as.numeric(sample_size_needed)/buckets, sep = "_")
                                ,paste('not_enough_sample',sample_size_needed, sep = "_"))
         
         #  score_pValue[[balancing[i]]]<-wilcox.test(Treatment[[balancing[i]]],Control[[balancing[i]]])$p.value    
@@ -184,7 +189,9 @@ for (level in 1:length(segmentation)){
     }
     Treatment$sample_check = check_sample
     Control$sample_check = check_sample
-    
+    Treatment$mde = mde
+    Control$mde = mde
+
     # Write all segments in one data set 
     All <-rbind(All,Treatment,Control)
     
