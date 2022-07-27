@@ -36,7 +36,7 @@ kpi
 # Main KPIs you want to balance on and take into consideration for outlier detection
 # Start with your main KPI
 balancing <- c("supply_hours" ,"early_supply_hours" ,"late_supply_hours" ,"early_rides_hours" , "late_rides_hours"  
-               ,"availability_hours" )
+              )
 
 #### Sample size check - please insert expected impact (relative) on your main KPI (first one in the balancing)
 expected_impact = 0.07
