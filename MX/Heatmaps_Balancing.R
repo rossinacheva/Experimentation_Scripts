@@ -8,7 +8,7 @@ lapply(wants, library, character.only=T)
 ##### Insert your data for balancing
 
 input<- read.csv("/Users/r.nacheva/Downloads/Heatmap_Targeting_2022_08_26.csv")
-
+input = subset(input, !(input$dr_segment %in% ('Retained')))
 
 summary(input)
 
