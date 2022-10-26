@@ -48,7 +48,7 @@ balancing <- c('same_as_file_column_names')
 
 
 #### Sample size check - please insert expected impact (relative) on your main KPI (first one in the balancing)
-expected_impact = 0.04 #do not define, not activated yet
+expected_impact = 0.04 #do not change, not activated yet
 
 # Define share for your treatment group, 0,5 for an equal split
 buckets = 0.5
