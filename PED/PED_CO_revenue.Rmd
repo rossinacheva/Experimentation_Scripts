@@ -1,0 +1,256 @@
+---
+title: "PED_CO_revenue" 
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r upload data}
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(magrittr)
+library(caret)
+library(ggplot2)
+library(reshape2)
+library(magrittr)
+library(tidyverse)
+library(dplyr)
+library(patchwork) # To display 2 charts together
+library(hrbrthemes)
+library(plyr)
+
+
+#correction = read.csv("/Users/r.nacheva/Downloads/correction_MX_test2.csv")
+#correction$corrections_values = as.numeric(correction$corrections_values)
+
+
+data =read.csv("/Users/r.nacheva/Downloads/PED_CO_t2_q3_data_extract_2_2022_08_12.csv")
+
+
+
+data$Date <- as.Date(data$hour,format = "%Y-%m-%d") # Change Data format
+
+data = data[order(data$Date),] # Order by date
+data$week_num = strftime(data$Date, format = "%V") # Add weekl number
+data$week_day1 <- weekdays(as.Date(data$Date)) #Add week day
+data$week_day = ifelse (data$week_day1 %in% c('Saturday','Sunday'),'weekend','weekday')
+
+data$hour_r = as.numeric(strftime(data$hour, format = "%H"))
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+
+data$period = ifelse (data$hour >= '2022-08-04 16:00:00.000','after',
+                      ifelse (data$hour >= '2022-07-28 16:00:00.000','week_3',
+                              ifelse (data$hour >= '2022-07-21 16:00:00.000','week_2',
+                                      ifelse (data$hour >= '2022-07-14 16:00:00.000','week_1',
+            
+                      ifelse (data$hour >= '2022-07-07 16:00:00.000','week_3_before',
+                              ifelse (data$hour >= '2022-06-30 16:00:00.000','week_2_before',
+                                      ifelse (data$hour >= '2022-06-23 16:00:00.000','week_1_before',     
+                                            
+                                            
+  'before'
+)))))))
+
+data$variant = 
+
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(1,5,9,13,17,21), '0.07',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(2,6,10,14,18,22), '0.14',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(3,7,11,15,19,23), '0.21',
+               ifelse (data$period %in% c( 'week_1','week_1_before') & data$hour_r %in% c(0,4,8,12,16,20), '0', 
+               
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(1,5,9,13,17,21), '0.21',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(2,6,10,14,18,22), '0.07',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(3,7,11,15,19,23), '0.14',
+               ifelse (data$period %in% c( 'week_2','week_2_before') & data$hour_r %in% c(0,4,8,12,16,20), '0',       
+  
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(1,5,9,13,17,21), '0.14',
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(2,6,10,14,18,22)
+                                                   &data$week_day %in% c('weekend'), '0.21', 
+
+                ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(2,6,14,18,22), '0.21', # no 21% in valley in week3
+         
+                   ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(3,7,11,15,19,23), '0.07',
+               ifelse (data$period %in% c( 'week_3','week_3_before') & data$hour_r %in% c(0,4,8,12,16,20), '0', 
+            'out_of_test'
+            )))))))))))))
+
+
+
+
+data$time_day = ifelse(data$hour_r %in% c(5,2,3,4) , '1_02_05',
+                       ifelse(data$hour_r %in% c(9,6,7,8) , '2_06_09',
+                      ifelse(data$hour_r %in% c(13,10,11,12) , '3_10_13',
+                      ifelse(data$hour_r %in% c(17,14,15,16) , '4_14_17',
+                      ifelse(data$hour_r %in% c(21,18,19,20) , '5_18_21',
+                      ifelse(data$hour_r %in% c(01,22,23,00) , '6_22_01',
+                    ''))))))
+
+
+data = subset(data, data$variant %in% c('0.07','0.14','0.21','0'))
+data$price_change = as.numeric(data$variant) 
+
+
+dra = data
+
+```
+
+
+
+```{r fig.height=3, fig.width=5}
+
+data = subset(dra, dra$variant %in% c('0', '0.07','0.14','0.21')
+            #  & dra$time_day != '3_10_13' )
+             # & dra$week_day == 'weekend')
+              & dra$week_day == 'weekday')
+
+
+
+#data$revenue = ifelse(data$variant == '0',data$revenue/(1.0668),data$revenue )
+
+col_factor <- sapply(data, is.factor)
+data[col_factor] <- lapply(data[col_factor], as.character)
+num_cols <- sapply(data, is.numeric)
+data[,num_cols][is.na(data[,num_cols])] <- 0
+
+data$price_change = as.numeric(data$variant) 
+
+
+summary(data)
+
+
+
+demand = data
+
+
+
+
+demand$basic_amount_corrected_1 = demand$basic_amount/(1+demand$price_change)
+
+demand$basic_amount_corrected = round_any(demand$basic_amount_corrected_1, 3, f = ceiling)
+demand = subset(demand, demand$basic_amount_corrected < 40000)
+names(demand)
+summary(demand)
+
+
+
+names(data)
+
+d_a <- demand %>%
+  group_by(variant) %>% #,Date,zone_new,special,time_day) %>%
+  dplyr::summarise(eyeballs_pass = sum(sess_eyeballs),
+                   eyeballs_unsess = sum(unsess_eyeballs),
+                   searches = sum(unsess_searches),
+                   requests = sum(sess_requests),
+                   rides = sum(rides),
+                   revenue = sum(revenue)
+  )%>% 
+  as.data.frame()
+d_a$Rev_pEye = d_a$revenue/ d_a$eyeballs_pass
+d_a$EtRC = d_a$requests/ d_a$eyeballs_pass
+
+names(demand)
+
+demand_a <- demand %>%
+  group_by(basic_amount_corrected,variant,price_change,week_day,time_day) %>% #,Date,zone_new,special,time_day) %>%
+  dplyr::summarise(eyeballs_pass = sum(sess_eyeballs),
+                   eyeballs_unsess = sum(unsess_eyeballs),
+                   searches = sum(unsess_searches),
+                   requests = sum(sess_requests),
+                   rides = sum(rides),
+                   revenue = sum(revenue),
+                   basic_amount_avg = mean(basic_amount)
+  )%>% 
+  as.data.frame()
+
+demand_a$EtSC = demand_a$searches/demand_a$eyeballs_unsess
+demand_a$EtRC = demand_a$requests/demand_a$eyeballs_pass
+demand_a$PuR = demand_a$rides/demand_a$requests
+demand_a$Rev_pEye = demand_a$revenue/demand_a$eyeballs_pass
+
+
+sum(demand_a$requests)/sum(demand_a$eyeballs_pass)
+
+#### excluding min fare and very long rides
+
+
+df <- demand %>%
+  group_by(basic_amount_corrected) %>% #,Date,zone_new,special,time_day) %>%
+  dplyr::summarise(
+                   sess_eyeballs = sum(sess_eyeballs),
+                   unsess_eyeballs = sum(unsess_eyeballs),
+                   revenue = sum(revenue)
+  )%>% 
+  as.data.frame()
+
+df_a = subset(df,df$sess_eyeballs >= 10)
+
+#plot(df_a$sess_eyeballs, type='l')
+#plot(df_a$revenue, type='l')
+
+
+
+
+demand_a = subset(demand_a,demand_a$eyeballs_unsess >= 3)
+lower_bound = quantile(demand_a$basic_amount_corrected, 0.01)
+upper_bound = quantile(demand_a$basic_amount_corrected, 0.8)
+
+demand_a = subset(demand_a, demand_a$basic_amount_corrected >= lower_bound & demand_a$basic_amount_corrected <= upper_bound)
+
+
+demand_a$variant = as.character(demand_a$variant)
+demand_a = subset(demand_a, demand_a$requests >= 0)
+
+
+names(demand_a)
+
+
+
+p_b = ggplot(demand_a, aes(basic_amount_corrected,EtRC, color = variant) ) +
+#  xlim (50, 230)+
+#   ylim (0.0, 0.6)+
+  geom_point(col = 'grey') +
+  stat_smooth(size=1.5)
+p_b + facet_wrap(~time_day+week_day)
+
+p_b 
+
+
+p_c = ggplot(demand_a, aes(basic_amount_corrected,Rev_pEye, color = variant) ) +
+  stat_smooth(size=1.5)
+p_c + facet_wrap(~time_day)
+p_c 
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
