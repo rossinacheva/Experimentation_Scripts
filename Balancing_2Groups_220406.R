@@ -1,4 +1,3 @@
-
 #### Install and load needed packages
 wants <- c("plyr", "dplyr", "boot", "lubridate", "samplesize","pwr")
 has   <- wants %in% rownames(installed.packages())
@@ -7,40 +6,51 @@ lapply(wants, library, character.only=T)
 
 ##### Insert your data for balancing
 
-input<- read.csv("/Users/r.nacheva/Downloads/Experiment_PE_Radius_Nov_2021_11_02.csv")
+input<- read.csv("/Users/Input_file.csv")
+# Example: input<- read.csv("/Users/r.nacheva/Downloads/Experiment_PE_Radius_Nov_2021_11_02.csv")
 
 
 summary(input)
-
 names(input)
 
-# Define segmentation : LIke country, driver type - most granular combination level
-segmentation <-  list(segment1 = c('starting_segment','taxi_type')
-)
+# Define segmentation : LIke country, driver type - most granular combination level, put 'total' for no segmentation
+segmentation <-  list(segment1 = c('total'))
+# Example: segmentation <-  list(segment1 = c('starting_segment','taxi_type'))
+
 
 
 # Define your entity - the final output will assign every entity to a test variant
-entity <- 'id_driver'
+entity <- 'entity'
+# Example: entity <- 'id_driver'
+
 
 # Create ratio KPIs: 
+kpi_name = c('name')  # same name as inserted in the balancing - put random and dont use in balancing if NOT needed
+kpi_nominator = c('nominator') # same as in data set, put random column name if NOT needed
+kpi_denominator = c('denominator') # same as in data set, put random column name if NOT needed
 
-kpi_name = c('accR','utilisation')  # same name as inserted in the balancing
-kpi_nominator = c('acc','Active_hours') # same as in data set
-kpi_denominator = c('broadcast','Supply_hours') # same as in data set
+# Example: kpi_name = c('accR','utilisation')  # same name as inserted in the balancing
+# Example: kpi_nominator = c('acc','Active_hours') # same as in data set
+# Example: kpi_denominator = c('broadcast','Supply_hours') # same as in data set
+
+
 
 # Create data set on new kpis - no user input needed
 kpi = cbind (kpi_name,kpi_nominator,kpi_denominator)
 kpi = as.data.frame(kpi)
 kpi
 
+
 # Main KPIs you want to balance on and take into consideration for outlier detection
 # Start with your main KPI
-balancing <- c('Rides','Supply_hours','active_days_period','driver_earning','Revenue','acc','accR','utilisation')
+balancing <- c('same_as_file_column_names')
+# Example: balancing <- c('Rides','Supply_hours','active_days_period','driver_earning','Revenue','acc','accR','utilisation')
+
 
 #### Sample size check - please insert expected impact (relative) on your main KPI (first one in the balancing)
-expected_impact = 0.04
+expected_impact = 0.04 #do not define, not activated yet
 
-# Define share for your treatment group (currently script devides into 2 groups only)
+# Define share for your treatment group, 0,5 for an equal split
 buckets = 0.5
 
 # Parameter for min allowed difference and  outlier detection
@@ -48,7 +58,10 @@ mean_difference = 0.1 # max allowed difference between groups (even when insigni
 outlier_threshold = 0.99 # 1 means no outliere detection - all 1 (100%) of the data is used
 
 # Define Output file name
-outputname <- '/Users/r.nacheva/Downloads/Balancing_PE_something.csv'
+outputname <- '/Users/output_name.csv'
+# Example: outputname <- '/Users/r.nacheva/Downloads/Balancing_PE_something.csv'
+
+
 
 ################################################
 ############## End manual input
@@ -162,7 +175,7 @@ for (level in 1:length(segmentation)){
         a = pwr.t.test(d=d, sig.level=.05, power = .90, type = 'two.sample')
         sample_size_needed <- a[1]
         
-       reverse = pwr.t.test(n=nrow(segment_input), sig.level=.05, power = .80, type = 'two.sample')
+        reverse = pwr.t.test(n=nrow(segment_input), sig.level=.05, power = .80, type = 'two.sample')
         mde = reverse$d 
         
         sample_size_needed <- a[1]
@@ -187,11 +200,11 @@ for (level in 1:length(segmentation)){
       p = p+1
       if (sum(score > mean_difference) == 0| p ==1000| is.na(sum(score > mean_difference)) == TRUE) break
     }
-    Treatment$sample_check = check_sample
-    Control$sample_check = check_sample
-    Treatment$mde = mde
-    Control$mde = mde
-
+    # Treatment$sample_check = check_sample
+    # Control$sample_check = check_sample
+    # Treatment$mde = mde
+    # Control$mde = mde
+    
     # Write all segments in one data set 
     All <-rbind(All,Treatment,Control)
     
