@@ -1,4 +1,3 @@
-
 lapply(list('plyr','dplyr','boot','lubridate','samplesize'), library, character.only = TRUE)
 
 
@@ -7,16 +6,6 @@ lapply(list('plyr','dplyr','boot','lubridate','samplesize'), library, character.
 ### Parameters
 ##########################################
 
-#setwd('C:/Users/rnacheva/Desktop/ASF_ABTest/Transformers_May_2019/Preliminary')
-
-#sku<-(read.csv2('Initial_Stock_Correct.csv', sep=",", na.strings = "-",dec='.'))
-
-#sku_eligible<-(read.csv2('Clean_Ready_forRebalancing_New.csv', sep=",", na.strings = "-",dec='.'))
-#sku_eligible<-subset(sku_eligible, sku_eligible$Final_Stock_ok ==1)
-
-#df_sales_data<-(read.csv2('ExaSol_Balancing_190510.csv', sep=",", na.strings = "-",dec='.'))
-
-#input<-(read.csv2('ASF_Stock_before.csv', sep=",", na.strings = "-",dec='.'))
 
 input<- read.csv("/Users/r.nacheva/Downloads/Lite ABC Commission Test - Target- 4WE Performance.csv")
 
@@ -26,10 +15,7 @@ summary(input)
 
 # Define segmentation : COUNTRY, SEASON, Total
 segmentation <-  list(segment1 = c('total')
-                      #segmentation <-  list(segment1 = c('COUNTRY','SEASON')
-                      #   ,segment2 = c('COUNTRY','SEASON')
-                      #  ,segment3 = c('total')
-)
+ )
 
 
 # Define your entity
@@ -42,7 +28,7 @@ input$bro = input$Broadcast-input$pending
 balancing <- c('Rides','HoursAvailable','Earnings','Acc','bro')
 
 # Define number of buckets (only 2 for now)
-buckets = 2
+#buckets = 2
 
 # Parameter for Wilcox test & outlier detection
 mean_difference = 0.2
@@ -240,12 +226,6 @@ endtime
 #write.table(All,outputname, sep=',', dec='.',row.names=F)
 
 
-write.table(All,"/Users/r.nacheva/Downloads/Balanced_forJonna.csv", sep=',', dec='.',row.names=F)
-
+write.table(All,outputname, sep=',', dec='.',row.names=F)
 
 #write.table(df_sales_data, 'Exasol.csv', sep=',', dec='.',row.names=F)
-
-
-
-
-
